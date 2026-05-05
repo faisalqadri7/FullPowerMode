@@ -10,37 +10,6 @@ Download the latest installer from GitHub Releases:
 
 After downloading, run `InstallFullPowerMode.exe` and approve the Windows administrator prompt.
 
-## Build App
-
-Run:
-
-```powershell
-.\build.ps1
-```
-
-Output:
-
-```text
-dist\FullPowerMode.exe
-```
-
-This is an intermediate app build used by the installer.
-
-## Build Installer
-
-Run:
-
-```powershell
-.\build-installer.ps1
-```
-
-Output:
-
-```text
-InstallFullPowerMode.exe
-```
-
-Double-click `InstallFullPowerMode.exe` to install the app to `C:\Program Files\FullPowerMode` and create Desktop plus Start Menu shortcuts. The setup window also includes an Uninstall button.
 
 ## Behavior
 
