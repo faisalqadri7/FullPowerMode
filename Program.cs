@@ -434,34 +434,66 @@ namespace FullPowerMode
             EnsureAdministrator();
             BackupCurrentSettings();
 
-            string ultimateGuid = DuplicateOrFindUltimatePlan();
-            RunPowerCfg("-setactive " + ultimateGuid);
-            RunPowerCfg("-setacvalueindex scheme_current sub_processor PROCTHROTTLEMIN 100");
-            RunPowerCfg("-setacvalueindex scheme_current sub_processor PROCTHROTTLEMAX 100");
-            RunPowerCfg("-setactive scheme_current");
-
-            SetDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", 1);
-            SetDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 0);
-            SetDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 26);
-
-            using (Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences"))
-            {
-            }
-
-            TrimWorkingSets();
-
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(BackupPath))
             {
                 key.SetValue("Enabled", 1, RegistryValueKind.DWord);
+                key.SetValue("EnableInProgress", 1, RegistryValueKind.DWord);
+            }
+
+            try
+            {
+                string ultimateGuid = DuplicateOrFindUltimatePlan();
+                BackupProcessorValues(ultimateGuid);
+
+                RunPowerCfg("-setactive " + ultimateGuid);
+                SetPowerCfgValueIndex(ultimateGuid, "PROCTHROTTLEMIN", 100);
+                SetPowerCfgValueIndex(ultimateGuid, "PROCTHROTTLEMAX", 100);
+                RunPowerCfg("-setactive " + ultimateGuid);
+
+                SetDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", 1);
+                SetDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 0);
+                SetDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 26);
+
+                using (Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\DirectX\UserGpuPreferences"))
+                {
+                }
+
+                TrimWorkingSets();
+
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(BackupPath))
+                {
+                    key.DeleteValue("EnableInProgress", false);
+                    key.SetValue("Enabled", 1, RegistryValueKind.DWord);
+                }
+            }
+            catch
+            {
+                try { RestoreBackedUpSettings(); }
+                catch { }
+                throw;
             }
         }
 
         public void Disable()
         {
             EnsureAdministrator();
+            RestoreBackedUpSettings();
+        }
 
+        private static void RestoreBackedUpSettings()
+        {
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(BackupPath))
             {
+                object enabled = key.GetValue("Enabled");
+                object inProgress = key.GetValue("EnableInProgress");
+                if (!(enabled is int) || (int)enabled != 1)
+                {
+                    if (!(inProgress is int) || (int)inProgress != 1)
+                        return;
+                }
+
+                RestoreProcessorValues(key);
+
                 string previousPowerScheme = key.GetValue("PreviousPowerScheme") as string;
                 if (!string.IsNullOrEmpty(previousPowerScheme))
                     RunPowerCfg("-setactive " + previousPowerScheme);
@@ -472,6 +504,8 @@ namespace FullPowerMode
                 RestoreRegistryDword(key, Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness");
                 RestoreRegistryDword(key, Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation");
 
+                ClearProcessorBackup(key);
+                key.DeleteValue("EnableInProgress", false);
                 key.SetValue("Enabled", 0, RegistryValueKind.DWord);
             }
         }
@@ -489,6 +523,47 @@ namespace FullPowerMode
                 BackupRegistryDword(key, Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness");
                 BackupRegistryDword(key, Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation");
             }
+        }
+
+        private static void BackupProcessorValues(string powerSchemeGuid)
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(BackupPath))
+            {
+                object backedUp = key.GetValue("ProcessorValuesBackedUp");
+                if (backedUp is int && (int)backedUp == 1)
+                    return;
+
+                key.SetValue("ProcessorPowerScheme", powerSchemeGuid, RegistryValueKind.String);
+                key.SetValue("ProcessorMinAcValue", GetPowerCfgValueIndex(powerSchemeGuid, "PROCTHROTTLEMIN"), RegistryValueKind.DWord);
+                key.SetValue("ProcessorMaxAcValue", GetPowerCfgValueIndex(powerSchemeGuid, "PROCTHROTTLEMAX"), RegistryValueKind.DWord);
+                key.SetValue("ProcessorValuesBackedUp", 1, RegistryValueKind.DWord);
+            }
+        }
+
+        private static void RestoreProcessorValues(RegistryKey backupKey)
+        {
+            object backedUp = backupKey.GetValue("ProcessorValuesBackedUp");
+            if (!(backedUp is int) || (int)backedUp != 1)
+                return;
+
+            string powerSchemeGuid = backupKey.GetValue("ProcessorPowerScheme") as string;
+            if (string.IsNullOrEmpty(powerSchemeGuid))
+                return;
+
+            object minValue = backupKey.GetValue("ProcessorMinAcValue");
+            object maxValue = backupKey.GetValue("ProcessorMaxAcValue");
+            if (minValue != null)
+                SetPowerCfgValueIndex(powerSchemeGuid, "PROCTHROTTLEMIN", Convert.ToInt32(minValue));
+            if (maxValue != null)
+                SetPowerCfgValueIndex(powerSchemeGuid, "PROCTHROTTLEMAX", Convert.ToInt32(maxValue));
+        }
+
+        private static void ClearProcessorBackup(RegistryKey backupKey)
+        {
+            backupKey.DeleteValue("ProcessorValuesBackedUp", false);
+            backupKey.DeleteValue("ProcessorPowerScheme", false);
+            backupKey.DeleteValue("ProcessorMinAcValue", false);
+            backupKey.DeleteValue("ProcessorMaxAcValue", false);
         }
 
         private static void BackupRegistryDword(RegistryKey backupKey, RegistryKey hive, string path, string name)
@@ -552,6 +627,24 @@ namespace FullPowerMode
             CommandResult result = RunPowerCfgAllowFail("-getactivescheme");
             string guid = ParseFirstGuid(result.Output);
             return string.IsNullOrEmpty(guid) ? "SCHEME_BALANCED" : guid;
+        }
+
+        private static int GetPowerCfgValueIndex(string powerSchemeGuid, string setting)
+        {
+            CommandResult result = RunPowerCfgAllowFail("-query " + powerSchemeGuid + " sub_processor " + setting);
+            if (result.ExitCode != 0)
+                throw new InvalidOperationException("powercfg failed: " + result.Error);
+
+            Match match = Regex.Match(result.Output, @"Current AC Power Setting Index:\s*0x([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
+            if (!match.Success)
+                throw new InvalidOperationException("Could not read processor power setting: " + setting);
+
+            return Convert.ToInt32(match.Groups[1].Value, 16);
+        }
+
+        private static void SetPowerCfgValueIndex(string powerSchemeGuid, string setting, int value)
+        {
+            RunPowerCfg("-setacvalueindex " + powerSchemeGuid + " sub_processor " + setting + " " + value);
         }
 
         private static string ParseFirstGuid(string text)

@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace FullPowerModeSetup
 {
@@ -62,6 +63,9 @@ namespace FullPowerModeSetup
         {
             report("Closing installed app if it is running...");
             CloseRunningInstalledApp();
+
+            report("Restoring power settings...");
+            PowerModeRestore.RestoreIfEnabled();
 
             report("Removing Desktop shortcut...");
             DeleteShortcut(GetCommonDesktopShortcutPath());
@@ -225,6 +229,119 @@ namespace FullPowerModeSetup
         }
     }
 
+    internal static class PowerModeRestore
+    {
+        private const string BackupPath = @"Software\FullPowerModeApp";
+
+        internal static void RestoreIfEnabled()
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(BackupPath))
+            {
+                object enabled = key.GetValue("Enabled");
+                if (!(enabled is int) || (int)enabled != 1)
+                    return;
+
+                RestoreProcessorValues(key);
+
+                string previousPowerScheme = key.GetValue("PreviousPowerScheme") as string;
+                if (!string.IsNullOrEmpty(previousPowerScheme))
+                    RunPowerCfg("-setactive " + previousPowerScheme);
+                else
+                    RunPowerCfg("-setactive SCHEME_BALANCED");
+
+                RestoreRegistryDword(key, Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff");
+                RestoreRegistryDword(key, Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness");
+                RestoreRegistryDword(key, Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation");
+
+                ClearProcessorBackup(key);
+                key.DeleteValue("EnableInProgress", false);
+                key.SetValue("Enabled", 0, RegistryValueKind.DWord);
+            }
+        }
+
+        private static void RestoreProcessorValues(RegistryKey backupKey)
+        {
+            object backedUp = backupKey.GetValue("ProcessorValuesBackedUp");
+            if (!(backedUp is int) || (int)backedUp != 1)
+                return;
+
+            string powerSchemeGuid = backupKey.GetValue("ProcessorPowerScheme") as string;
+            if (string.IsNullOrEmpty(powerSchemeGuid))
+                return;
+
+            object minValue = backupKey.GetValue("ProcessorMinAcValue");
+            object maxValue = backupKey.GetValue("ProcessorMaxAcValue");
+            if (minValue != null)
+                SetPowerCfgValueIndex(powerSchemeGuid, "PROCTHROTTLEMIN", Convert.ToInt32(minValue));
+            if (maxValue != null)
+                SetPowerCfgValueIndex(powerSchemeGuid, "PROCTHROTTLEMAX", Convert.ToInt32(maxValue));
+        }
+
+        private static void ClearProcessorBackup(RegistryKey backupKey)
+        {
+            backupKey.DeleteValue("ProcessorValuesBackedUp", false);
+            backupKey.DeleteValue("ProcessorPowerScheme", false);
+            backupKey.DeleteValue("ProcessorMinAcValue", false);
+            backupKey.DeleteValue("ProcessorMaxAcValue", false);
+        }
+
+        private static void RestoreRegistryDword(RegistryKey backupKey, RegistryKey hive, string path, string name)
+        {
+            object existsValue = backupKey.GetValue(name + "Exists");
+            bool existed = existsValue is int && (int)existsValue == 1;
+
+            if (existed)
+            {
+                object value = backupKey.GetValue(name + "Value");
+                SetDword(hive, path, name, value == null ? 0 : Convert.ToInt32(value));
+            }
+            else
+            {
+                using (RegistryKey key = hive.OpenSubKey(path, true))
+                {
+                    if (key != null)
+                    {
+                        try { key.DeleteValue(name, false); }
+                        catch { }
+                    }
+                }
+            }
+        }
+
+        private static void SetDword(RegistryKey hive, string path, string name, int value)
+        {
+            using (RegistryKey key = hive.CreateSubKey(path))
+            {
+                key.SetValue(name, value, RegistryValueKind.DWord);
+            }
+        }
+
+        private static void SetPowerCfgValueIndex(string powerSchemeGuid, string setting, int value)
+        {
+            RunPowerCfg("-setacvalueindex " + powerSchemeGuid + " sub_processor " + setting + " " + value);
+        }
+
+        private static void RunPowerCfg(string arguments)
+        {
+            ProcessStartInfo start = new ProcessStartInfo();
+            start.FileName = "powercfg.exe";
+            start.Arguments = arguments;
+            start.UseShellExecute = false;
+            start.CreateNoWindow = true;
+            start.RedirectStandardOutput = true;
+            start.RedirectStandardError = true;
+
+            using (Process process = Process.Start(start))
+            {
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                    throw new InvalidOperationException("powercfg failed: " + (string.IsNullOrEmpty(error) ? output : error));
+            }
+        }
+    }
+
     internal sealed class InstallerForm : Form
     {
         private readonly Label titleLabel;
@@ -355,6 +472,7 @@ namespace FullPowerModeSetup
                 else
                     statusLabel.Text = "Already installed. You can open or uninstall it.";
             };
+            FormClosing += InstallerFormClosing;
         }
 
         private void BeginInstall()
@@ -387,6 +505,7 @@ namespace FullPowerModeSetup
             installButton.Enabled = false;
             uninstallButton.Enabled = false;
             launchButton.Enabled = false;
+            closeButton.Enabled = false;
             Cursor = Cursors.AppStarting;
 
             ThreadPool.QueueUserWorkItem(delegate
@@ -395,34 +514,59 @@ namespace FullPowerModeSetup
                 {
                     operation(delegate(string message)
                     {
-                        BeginInvoke(new MethodInvoker(delegate { statusLabel.Text = message; }));
+                        PostToUi(delegate { statusLabel.Text = message; });
                         Thread.Sleep(200);
                     });
 
-                    BeginInvoke(new MethodInvoker(delegate
+                    PostToUi(delegate
                     {
                         operationRunning = false;
                         statusLabel.Text = successMessage;
                         installButton.Enabled = true;
                         uninstallButton.Enabled = true;
                         launchButton.Enabled = installedAfterSuccess;
+                        closeButton.Enabled = true;
                         closeButton.Text = "Finish";
                         Cursor = Cursors.Default;
-                    }));
+                    });
                 }
                 catch (Exception ex)
                 {
-                    BeginInvoke(new MethodInvoker(delegate
+                    PostToUi(delegate
                     {
                         operationRunning = false;
                         installButton.Enabled = true;
                         uninstallButton.Enabled = true;
                         launchButton.Enabled = InstallerProgram.IsInstalled;
+                        closeButton.Enabled = true;
                         statusLabel.Text = failurePrefix + ex.Message;
                         Cursor = Cursors.Default;
-                    }));
+                    });
                 }
             });
+        }
+
+        private void InstallerFormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (!operationRunning)
+                return;
+
+            e.Cancel = true;
+            statusLabel.Text = "Please wait for the current operation to finish.";
+        }
+
+        private void PostToUi(MethodInvoker action)
+        {
+            if (IsDisposed || !IsHandleCreated)
+                return;
+
+            try
+            {
+                BeginInvoke(action);
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         private static void OpenWhatsApp()
