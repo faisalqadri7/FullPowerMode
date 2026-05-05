@@ -10,6 +10,44 @@ Download the latest installer from GitHub Releases:
 
 After downloading, run `InstallFullPowerMode.exe` and approve the Windows administrator prompt.
 
+## Latest Release
+
+Version `v1.0.1` includes safer restore behavior:
+
+- Rolls back backed-up power settings if enable fails partway through.
+- Restores power settings before uninstall removes the app.
+- Backs up and restores CPU processor min/max plan values.
+- Prevents setup from closing while install or uninstall is still running.
+
+## Build App
+
+Run:
+
+```powershell
+.\build.ps1
+```
+
+Output:
+
+```text
+dist\FullPowerMode.exe
+```
+
+This is an intermediate app build used by the installer.
+
+## Build Installer
+
+Run:
+
+```powershell
+.\build-installer.ps1
+```
+
+Output:
+
+```text
+InstallFullPowerMode.exe
+```
 
 ## Behavior
 
