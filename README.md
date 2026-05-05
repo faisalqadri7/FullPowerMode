@@ -2,6 +2,14 @@
 
 Windows GUI toggle app for the provided power-boost PowerShell behavior.
 
+## Download
+
+Download the latest installer from GitHub Releases:
+
+[Download InstallFullPowerMode.exe](https://github.com/faisalqadri7/FullPowerMode/releases/latest/download/InstallFullPowerMode.exe)
+
+After downloading, run `InstallFullPowerMode.exe` and approve the Windows administrator prompt.
+
 ## Build App
 
 Run:
