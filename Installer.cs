@@ -9,12 +9,19 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
+[assembly: AssemblyTitle("Full Power Mode Setup")]
+[assembly: AssemblyProduct("Full Power Mode")]
+[assembly: AssemblyVersion("1.0.3.0")]
+[assembly: AssemblyFileVersion("1.0.3.0")]
+[assembly: AssemblyInformationalVersion("1.0.3")]
+
 namespace FullPowerModeSetup
 {
     internal static class InstallerProgram
     {
         private const string AppName = "Full Power Mode";
         private const string ResourceName = "FullPowerMode.exe";
+        internal const string AppVersion = "1.0.3";
 
         [STAThread]
         private static void Main()
@@ -354,7 +361,7 @@ namespace FullPowerModeSetup
 
         public InstallerForm()
         {
-            Text = "Full Power Mode Setup";
+            Text = "Full Power Mode Setup " + InstallerProgram.AppVersion;
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -371,7 +378,7 @@ namespace FullPowerModeSetup
             appLogo.SizeMode = PictureBoxSizeMode.Zoom;
 
             titleLabel = new Label();
-            titleLabel.Text = "Install Full Power Mode";
+            titleLabel.Text = "Install Full Power Mode " + InstallerProgram.AppVersion;
             titleLabel.Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold);
             titleLabel.ForeColor = Color.FromArgb(24, 28, 35);
             titleLabel.Location = new Point(74, 22);

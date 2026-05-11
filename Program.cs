@@ -12,10 +12,18 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
+[assembly: AssemblyTitle("Full Power Mode")]
+[assembly: AssemblyProduct("Full Power Mode")]
+[assembly: AssemblyVersion("1.0.3.0")]
+[assembly: AssemblyFileVersion("1.0.3.0")]
+[assembly: AssemblyInformationalVersion("1.0.3")]
+
 namespace FullPowerMode
 {
     internal static class Program
     {
+        internal const string AppVersion = "1.0.3";
+
         [STAThread]
         private static void Main()
         {
@@ -39,7 +47,7 @@ namespace FullPowerMode
 
         public MainForm()
         {
-            Text = "Full Power Mode";
+            Text = "Full Power Mode " + Program.AppVersion;
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -56,7 +64,7 @@ namespace FullPowerMode
             appLogo.SizeMode = PictureBoxSizeMode.Zoom;
 
             titleLabel = new Label();
-            titleLabel.Text = "Full Power Mode";
+            titleLabel.Text = "Full Power Mode " + Program.AppVersion;
             titleLabel.Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold);
             titleLabel.ForeColor = Color.FromArgb(24, 28, 35);
             titleLabel.Location = new Point(72, 20);
