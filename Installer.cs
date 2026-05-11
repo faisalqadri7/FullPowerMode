@@ -11,9 +11,9 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Full Power Mode Setup")]
 [assembly: AssemblyProduct("Full Power Mode")]
-[assembly: AssemblyVersion("1.0.3.0")]
-[assembly: AssemblyFileVersion("1.0.3.0")]
-[assembly: AssemblyInformationalVersion("1.0.3")]
+[assembly: AssemblyVersion("1.0.4.0")]
+[assembly: AssemblyFileVersion("1.0.4.0")]
+[assembly: AssemblyInformationalVersion("1.0.4")]
 
 namespace FullPowerModeSetup
 {
@@ -21,7 +21,7 @@ namespace FullPowerModeSetup
     {
         private const string AppName = "Full Power Mode";
         private const string ResourceName = "FullPowerMode.exe";
-        internal const string AppVersion = "1.0.3";
+        internal const string AppVersion = "1.0.4";
 
         [STAThread]
         private static void Main()
@@ -46,6 +46,29 @@ namespace FullPowerModeSetup
             get { return File.Exists(InstalledExePath); }
         }
 
+        internal static bool IsCurrentVersion
+        {
+            get
+            {
+                Version installedVersion;
+                return TryGetInstalledVersion(out installedVersion) && installedVersion.CompareTo(CurrentVersion) >= 0;
+            }
+        }
+
+        internal static string InstalledVersionText
+        {
+            get
+            {
+                Version installedVersion;
+                return TryGetInstalledVersion(out installedVersion) ? installedVersion.ToString() : "unknown";
+            }
+        }
+
+        private static Version CurrentVersion
+        {
+            get { return new Version(AppVersion); }
+        }
+
         internal static void Install(Action<string> report)
         {
             report("Preparing installation folder...");
@@ -64,6 +87,25 @@ namespace FullPowerModeSetup
             CreateStartMenuShortcut();
 
             report("Installation complete.");
+        }
+
+        private static bool TryGetInstalledVersion(out Version version)
+        {
+            version = null;
+
+            if (!File.Exists(InstalledExePath))
+                return false;
+
+            try
+            {
+                FileVersionInfo info = FileVersionInfo.GetVersionInfo(InstalledExePath);
+                string text = string.IsNullOrEmpty(info.ProductVersion) ? info.FileVersion : info.ProductVersion;
+                return Version.TryParse(text, out version);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         internal static void Uninstall(Action<string> report)
@@ -127,7 +169,7 @@ namespace FullPowerModeSetup
                     try { path = process.MainModule.FileName; }
                     catch { }
 
-                    if (!string.Equals(path, InstalledExePath, StringComparison.OrdinalIgnoreCase))
+                    if (!string.IsNullOrEmpty(path) && !string.Equals(path, InstalledExePath, StringComparison.OrdinalIgnoreCase))
                         continue;
 
                     process.CloseMainWindow();
@@ -436,7 +478,7 @@ namespace FullPowerModeSetup
             whatsappLink.LinkClicked += delegate { OpenWhatsApp(); };
 
             installButton = new Button();
-            installButton.Text = "Install";
+            installButton.Text = InstallerProgram.IsInstalled ? "Update" : "Install";
             installButton.Location = new Point(102, 228);
             installButton.Size = new Size(78, 28);
             installButton.Click += delegate { BeginInstall(); };
@@ -476,8 +518,13 @@ namespace FullPowerModeSetup
             {
                 if (!InstallerProgram.IsInstalled)
                     BeginInstall();
+                else if (!InstallerProgram.IsCurrentVersion)
+                {
+                    statusLabel.Text = "Updating installed version " + InstallerProgram.InstalledVersionText + "...";
+                    BeginInstall();
+                }
                 else
-                    statusLabel.Text = "Already installed. You can open or uninstall it.";
+                    statusLabel.Text = "Version " + InstallerProgram.AppVersion + " is already installed.";
             };
             FormClosing += InstallerFormClosing;
         }
