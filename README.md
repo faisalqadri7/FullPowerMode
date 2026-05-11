@@ -12,10 +12,10 @@ After downloading, run `InstallFullPowerMode.exe` and approve the Windows admini
 
 ## Latest Release
 
-Version `v1.0.4` includes a fresh single-file installer built from the latest app code:
+Version `v1.0.5` includes a fresh single-file installer built from the latest app code:
 
 - Embeds the current `FullPowerMode.exe` inside `InstallFullPowerMode.exe`.
-- Displays `1.0.4` in the app and setup window metadata.
+- Displays `1.0.5` in the app and setup window metadata.
 - Automatically updates an older installed copy instead of stopping at "Already installed."
 - Rolls back backed-up power settings if enable fails partway through.
 - Restores power settings before uninstall removes the app.

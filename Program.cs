@@ -14,15 +14,15 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Full Power Mode")]
 [assembly: AssemblyProduct("Full Power Mode")]
-[assembly: AssemblyVersion("1.0.4.0")]
-[assembly: AssemblyFileVersion("1.0.4.0")]
-[assembly: AssemblyInformationalVersion("1.0.4")]
+[assembly: AssemblyVersion("1.0.5.0")]
+[assembly: AssemblyFileVersion("1.0.5.0")]
+[assembly: AssemblyInformationalVersion("1.0.5")]
 
 namespace FullPowerMode
 {
     internal static class Program
     {
-        internal const string AppVersion = "1.0.4";
+        internal const string AppVersion = "1.0.5";
 
         [STAThread]
         private static void Main()
